@@ -14,8 +14,8 @@ info()    { echo -e "${YELLOW}▶ $*${NC}"; }
 success() { echo -e "${GREEN}✔ $*${NC}"; }
 error()   { echo -e "${RED}✘ $*${NC}"; }
 
-REPO_URL="https://github.com/doro098/qr-gym-v2"
-REPO_DIR="$HOME/qr-gym-v2"
+REPO_URL="https://github.com/doro098/qr-gym"
+REPO_DIR="$HOME/qr-gym"
 RUN_USER="${SUDO_USER:-$USER}"
 
 # =============================================================================
