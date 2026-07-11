@@ -18,7 +18,6 @@ from db.repo_clientes import (
     verificar_acceso_completo,          # NUEVA
 )
 from db.repo_logs import obtener_historial, registrar_evento
-from db.estadisticas import obtener_datos_inicio, obtener_estadisticas
 from db.repo_disciplinas import (      # NUEVO
     crear_disciplina,
     obtener_disciplinas,
