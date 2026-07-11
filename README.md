@@ -1,3 +1,5 @@
+
+
 # QR-GYM
 
 Sistema de gestión de clientes para gimnasios con autenticación por código QR, diseñado para Raspberry Pi Zero 2W. Incluye panel web, API de acceso y control de cerradura mediante GPIO.
