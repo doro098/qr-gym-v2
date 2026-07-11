@@ -19,7 +19,7 @@ import urllib.parse
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from hardware.scanner import ScannerQR
 
-# Configuración del AP
+# Configuración del AP (sin cambios)
 AP_SSID = "QR-GYM-SETUP"
 AP_PASSWORD = ""  # Sin contraseña (o pon una si quieres)
 AP_INTERFACE = "wlan0"
@@ -27,10 +27,10 @@ AP_IP = "192.168.4.1"
 AP_NETMASK = "255.255.255.0"
 DHCP_RANGE = "192.168.4.2,192.168.4.20,255.255.255.0,24h"
 
-# Archivos de configuración
+# Archivos de configuración (ya no usaremos wpa_supplicant)
 HOSTAPD_CONF = "/etc/hostapd/hostapd.conf"
 DNSMASQ_CONF = "/etc/dnsmasq.conf"
-WPA_SUPPLICANT = "/etc/wpa_supplicant/wpa_supplicant.conf"
+# WPA_SUPPLICANT ya no se usa
 
 # Interfaz Wi‑Fi
 WLAN_INTERFACE = "wlan0"
@@ -42,10 +42,13 @@ scanner = None
 
 
 def wifi_conectado():
-    """Devuelve True si la interfaz inalámbrica está conectada a una red."""
-    ssid = os.popen("iwgetid -r").read().strip()
-    if ssid:
+    """Devuelve True si la interfaz inalámbrica está conectada a una red usando nmcli."""
+    # Usamos nmcli para obtener el estado de la conexión activa
+    resultado = os.popen("nmcli -t -f DEVICE,TYPE,STATE device status | grep wlan0").read().strip()
+    # Buscamos "connected" en el estado
+    if "connected" in resultado:
         return True
+    # También podríamos comprobar si hay una IP
     ip = os.popen(f"ip -4 addr show {WLAN_INTERFACE} | grep inet").read().strip()
     return bool(ip)
 
@@ -60,61 +63,28 @@ def parse_wifi_qr(data):
 
 
 def configurar_wifi(ssid, password):
-    """Escribe la configuración en wpa_supplicant.conf y reinicia la interfaz."""
-    try:
-        with open(WPA_SUPPLICANT, "r") as f:
-            contenido = f.read()
-    except FileNotFoundError:
-        contenido = ""
+    """
+    Configura la red Wi‑Fi usando nmcli.
+    Borra cualquier conexión previa con el mismo SSID y crea una nueva.
+    """
+    # Escapar posibles caracteres especiales en SSID y password (nmcli lo maneja bien con comillas)
+    # Usamos comillas simples para evitar expansión de shell
+    comando_borrar = f"sudo nmcli connection delete '{ssid}' 2>/dev/null"
+    os.system(comando_borrar)
 
-    # Eliminar bloques previos con el mismo SSID
-    lines = contenido.splitlines()
-    new_lines = []
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        if line.startswith("network={"):
-            block = []
-            j = i
-            brace_count = 0
-            while j < len(lines):
-                block.append(lines[j])
-                brace_count += lines[j].count("{") - lines[j].count("}")
-                if brace_count == 0:
-                    j += 1
-                    break
-                j += 1
-            block_text = "\n".join(block)
-            if f'ssid="{ssid}"' in block_text or f"ssid={ssid}" in block_text:
-                i = j
-                continue
-            else:
-                new_lines.extend(block)
-                i = j
-        else:
-            new_lines.append(lines[i])
-            i += 1
+    comando_conectar = f"sudo nmcli device wifi connect '{ssid}' password '{password}'"
+    resultado = os.system(comando_conectar)
 
-    new_lines.append("")
-    new_lines.append("network={")
-    new_lines.append(f'    ssid="{ssid}"')
-    new_lines.append(f'    psk="{password}"')
-    new_lines.append("    key_mgmt=WPA-PSK")
-    new_lines.append("}")
-
-    with open(WPA_SUPPLICANT, "w") as f:
-        f.write("\n".join(new_lines))
-
-    # Reiniciar interfaz
-    os.system(f"sudo ip link set {WLAN_INTERFACE} down")
-    time.sleep(1)
-    os.system(f"sudo ip link set {WLAN_INTERFACE} up")
-    os.system("sudo wpa_cli -i wlan0 reconfigure")
-    print(f"✅ Wi‑Fi configurada con SSID: {ssid}")
+    if resultado == 0:
+        print(f"✅ Wi‑Fi configurada con SSID: {ssid} (NetworkManager)")
+        return True
+    else:
+        print(f"❌ Error al configurar Wi‑Fi con nmcli (código {resultado})")
+        return False
 
 
 def iniciar_ap():
-    """Configura y arranca el punto de acceso (hostapd + dnsmasq)."""
+    """Configura y arranca el punto de acceso (hostapd + dnsmasq). (sin cambios)"""
     print("📶 Configurando punto de acceso...")
 
     # Configurar hostapd
@@ -166,15 +136,12 @@ def detener_ap():
     os.system("sudo systemctl disable hostapd")
     os.system("sudo systemctl disable dnsmasq")
     os.system(f"sudo ip addr flush dev {AP_INTERFACE}")
-    # Restaurar wpa_supplicant (si existe)
-    os.system("sudo systemctl restart wpa_supplicant")
-    # Opcional: reiniciar interfaz
-    os.system(f"sudo ip link set {AP_INTERFACE} down")
-    time.sleep(1)
-    os.system(f"sudo ip link set {AP_INTERFACE} up")
+    # Reiniciar NetworkManager para que retome el control de la interfaz
+    os.system("sudo systemctl restart NetworkManager")
+    print("✅ AP detenido, NetworkManager reiniciado.")
 
 
-# ---------- Servidor HTTP con formulario ----------
+# ---------- Servidor HTTP con formulario (sin cambios) ----------
 class SetupHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # Silenciar logs
@@ -226,7 +193,6 @@ button:hover { background: #0f3a60; }
                 self.send_header("Content-type", "text/html; charset=utf-8")
                 self.end_headers()
                 self.wfile.write(b"<h2>¡Conectando a la red! Espera unos segundos...</h2>")
-                # El servidor se detendrá después de enviar la respuesta
             else:
                 self.send_error(400)
 
@@ -274,7 +240,7 @@ def main():
     web_thread = threading.Thread(target=servidor_web, daemon=True)
     web_thread.start()
 
-    # Lanzar hilo del escáner QR (en el hilo principal o en otro)
+    # Lanzar hilo del escáner QR
     qr_thread = threading.Thread(target=escanear_qr, daemon=True)
     qr_thread.start()
 
@@ -285,18 +251,18 @@ def main():
     ssid, password = wifi_credentials
 
     # Configurar Wi‑Fi
-    configurar_wifi(ssid, password)
+    if configurar_wifi(ssid, password):
+        # Detener AP
+        detener_ap()
 
-    # Detener AP
-    detener_ap()
+        # Esperar unos segundos para que la interfaz se estabilice
+        time.sleep(3)
 
-    # Esperar unos segundos para que la interfaz se estabilice
-    time.sleep(3)
-
-    print("✅ Configuración completada. Reiniciando para arrancar el sistema de acceso...")
-    # Podemos reiniciar el sistema o simplemente salir (el servicio de acceso arrancará después)
-    # Para asegurar, reiniciamos completamente (o podemos confiar en systemd)
-    os.system("sudo reboot")
+        print("✅ Configuración completada. Reiniciando para arrancar el sistema de acceso...")
+        os.system("sudo reboot")
+    else:
+        print("❌ Falló la configuración de la red. Reiniciando para reintentar.")
+        os.system("sudo reboot")
 
 
 if __name__ == "__main__":
