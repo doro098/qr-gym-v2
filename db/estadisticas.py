@@ -43,7 +43,7 @@ def obtener_datos_inicio():
 
 
 def obtener_estadisticas():
-    """Devuelve datos agregados para la página de estadísticas, incluyendo disciplina."""
+    """Devuelve datos agregados para la página de estadísticas."""
     hoy = datetime.now().date()
     mes_inicio = hoy.replace(day=1).isoformat()
     hoy_iso = hoy.isoformat()
@@ -51,7 +51,6 @@ def obtener_estadisticas():
     with get_db_connection() as conn:
         cur = conn.cursor()
 
-        # Totales simples
         total_clientes = cur.execute("SELECT COUNT(*) FROM clientes").fetchone()[0]
         accesos_hoy = cur.execute(
             "SELECT COUNT(*) FROM logs WHERE tipo='ACCESO' AND resultado='EXITO' AND fecha >= ? || ' 00:00:00'",
@@ -70,7 +69,6 @@ def obtener_estadisticas():
             (hoy_iso,)
         ).fetchone()[0]
 
-        # Hora pico
         hora_pico_row = cur.execute("""
             SELECT substr(fecha, 12, 2) as hora, COUNT(*) as cnt
             FROM logs WHERE tipo='ACCESO' AND resultado='EXITO'
@@ -78,7 +76,6 @@ def obtener_estadisticas():
         """).fetchone()
         hora_pico = (hora_pico_row[0] + ":00") if hora_pico_row else "--"
 
-        # Días de semana
         dias_rows = cur.execute("""
             SELECT strftime('%w', fecha) as dow, COUNT(*) as cnt
             FROM logs WHERE tipo='ACCESO' AND resultado='EXITO'
@@ -88,7 +85,6 @@ def obtener_estadisticas():
         dias_semana_labels = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
         dias_semana_data = [dias_map.get(str(i), 0) for i in range(7)]
 
-        # Horas
         horas_rows = cur.execute("""
             SELECT substr(fecha, 12, 2) as hora, COUNT(*) as cnt
             FROM logs WHERE tipo='ACCESO' AND resultado='EXITO'
@@ -97,7 +93,6 @@ def obtener_estadisticas():
         horas_labels = [r[0] + ":00" for r in horas_rows]
         horas_data = [r[1] for r in horas_rows]
 
-        # Top 10 clientes
         top_rows = cur.execute(
             """
             SELECT c.nombre || ' ' || COALESCE(c.apellido, '') as nombre, COUNT(*) as cnt
@@ -111,7 +106,6 @@ def obtener_estadisticas():
         top_clientes_nombres = [r[0].strip() for r in top_rows]
         top_clientes_counts = [r[1] for r in top_rows]
 
-        # Resultados torta
         res_rows = cur.execute(
             """
             SELECT resultado, COUNT(*) FROM logs
@@ -124,7 +118,7 @@ def obtener_estadisticas():
         resultados_labels = [r[0] for r in res_rows]
         resultados_data = [r[1] for r in res_rows]
 
-        # Línea últimos 14 días
+        # Últimos 14 días (renombramos la variable 'l' por 'item')
         linea = []
         for i in range(13, -1, -1):
             dia = (hoy - timedelta(days=i)).isoformat()
@@ -137,10 +131,10 @@ def obtener_estadisticas():
                 (dia, dia)
             ).fetchone()[0]
             linea.append((dia[5:], cnt))
-        linea_labels = [l[0] for l in linea]
-        linea_data = [l[1] for l in linea]
+        linea_labels = [item[0] for item in linea]
+        linea_data = [item[1] for item in linea]
 
-        # Accesos por disciplina (último mes)
+        # Accesos por disciplina
         disc_rows = cur.execute(
             """
             SELECT disciplina, COUNT(*) as cnt
